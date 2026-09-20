@@ -1,3 +1,5 @@
+import { translateText } from '@/utils/translate';
+
 // 生成唯一ID
 export const generateId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -17,34 +19,14 @@ export const delay = (ms: number): Promise<void> => {
   return new Promise(resolve => setTimeout(resolve, ms));
 };
 
-// 模拟翻译API
+// 模拟翻译API - 与语音/手动入口共用同一套翻译逻辑与兜底写法
 export const mockTranslate = async (
   text: string,
-  _sourceLang: string,
-  _targetLang: string
+  sourceLang: string,
+  targetLang: string
 ): Promise<string> => {
   await delay(800 + Math.random() * 500);
-  
-  // 简单的模拟翻译逻辑
-  const translations: Record<string, string> = {
-    '你好': 'Hello',
-    '世界': 'World',
-    '翻译': 'Translation',
-    '测试': 'Test',
-    '系统': 'System',
-  };
-  
-  let result = text;
-  Object.entries(translations).forEach(([cn, en]) => {
-    result = result.replace(new RegExp(cn, 'g'), en);
-  });
-  
-  // 如果没有匹配，返回带标记的文本
-  if (result === text) {
-    result = `[Translated] ${text}`;
-  }
-  
-  return result;
+  return translateText(text, sourceLang, targetLang);
 };
 
 // 截断文本

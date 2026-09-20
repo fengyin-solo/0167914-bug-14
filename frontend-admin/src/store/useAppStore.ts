@@ -1,9 +1,11 @@
 import { create } from 'zustand';
-import type { AppState, ToastType, AudioSettings, SessionRecord } from '@/types';
+import type { AppState, ToastType, AudioSettings, SessionRecord, SubtitleEntry } from '@/types';
 import { generateId } from '@/utils/helpers';
+import { translateText } from '@/utils/translate';
 import { DEFAULT_AUDIO_SETTINGS, TOAST_DURATION } from '@/utils/constants';
 
 const STORAGE_KEY = 'subtitle-translator-session-records';
+const SUBTITLES_STORAGE_KEY = 'subtitle-translator-subtitles';
 
 const loadRecordsFromStorage = (): SessionRecord[] => {
   try {
@@ -29,6 +31,30 @@ const saveRecordsToStorage = (records: SessionRecord[]) => {
   }
 };
 
+const loadSubtitlesFromStorage = (): SubtitleEntry[] => {
+  try {
+    const stored = localStorage.getItem(SUBTITLES_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.map((s: SubtitleEntry) => ({
+        ...s,
+        timestamp: new Date(s.timestamp),
+      }));
+    }
+  } catch {
+    console.error('Failed to load subtitles from storage');
+  }
+  return [];
+};
+
+const saveSubtitlesToStorage = (subtitles: SubtitleEntry[]) => {
+  try {
+    localStorage.setItem(SUBTITLES_STORAGE_KEY, JSON.stringify(subtitles));
+  } catch {
+    console.error('Failed to save subtitles to storage');
+  }
+};
+
 export const useAppStore = create<AppState>((set, get) => ({
   // 控制面板状态
   sourceLang: 'zh-CN',
@@ -37,8 +63,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   isRecording: false,
   audioSettings: DEFAULT_AUDIO_SETTINGS,
   
-  // 字幕状态 - 初始为空
-  subtitles: [],
+  // 字幕状态 - 从本地存储恢复，保留原文、时间戳与当前高亮
+  subtitles: loadSubtitlesFromStorage(),
   currentSubtitle: '',
   
   // 翻译状态
@@ -77,8 +103,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   
   addSubtitle: (original: string, translated: string) => {
     const { sourceLang, targetLang } = get();
-    set(state => ({
-      subtitles: [
+    set(state => {
+      const newSubtitles = [
         ...state.subtitles.map(s => ({ ...s, isActive: false })),
         {
           id: generateId(),
@@ -87,9 +113,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           timestamp: new Date(),
           isActive: true,
         },
-      ],
-      currentSubtitle: '',
-    }));
+      ];
+      saveSubtitlesToStorage(newSubtitles);
+      return {
+        subtitles: newSubtitles,
+        currentSubtitle: '',
+      };
+    });
     get().addSessionRecord({
       type: 'voice',
       sourceText: original,
@@ -116,11 +146,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     
     set({ isTranslating: true });
-    
+
     try {
-      // 模拟翻译
+      // 模拟翻译延迟，实际翻译走与两条入口一致的统一逻辑
       await new Promise(resolve => setTimeout(resolve, 800));
-      const result = `[Translated] ${inputText}`;
+      const result = translateText(inputText, sourceLang, targetLang);
       
       set(state => ({
         translationHistory: [
