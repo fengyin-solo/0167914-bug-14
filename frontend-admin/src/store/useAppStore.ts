@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AppState, ToastType, AudioSettings, SessionRecord } from '@/types';
 import { generateId } from '@/utils/helpers';
+import { translateText, isSupportedLanguagePair } from '@/utils/translate';
 import { DEFAULT_AUDIO_SETTINGS, TOAST_DURATION } from '@/utils/constants';
 
 const STORAGE_KEY = 'subtitle-translator-session-records';
@@ -9,11 +10,28 @@ const loadRecordsFromStorage = (): SessionRecord[] => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored);
-      return parsed.map((r: SessionRecord) => ({
-        ...r,
-        timestamp: new Date(r.timestamp),
-      }));
+      const parsed = JSON.parse(stored) as SessionRecord[];
+      let repaired = false;
+      const records = parsed.map(r => {
+        const record: SessionRecord = {
+          ...r,
+          timestamp: new Date(r.timestamp),
+        };
+        // 旧版本两条入口的翻译逻辑不一致，可能已写入错误译文；
+        // 这里用统一逻辑校正译文，原文、时间戳等其余字段保持不变
+        if (isSupportedLanguagePair(record.sourceLang, record.targetLang)) {
+          const fixed = translateText(record.sourceText, record.sourceLang, record.targetLang);
+          if (fixed !== record.targetText) {
+            record.targetText = fixed;
+            repaired = true;
+          }
+        }
+        return record;
+      });
+      if (repaired) {
+        saveRecordsToStorage(records);
+      }
+      return records;
     }
   } catch {
     console.error('Failed to load session records from storage');
@@ -116,11 +134,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     
     set({ isTranslating: true });
-    
+
     try {
-      // 模拟翻译
+      // 模拟翻译延迟，翻译逻辑与语音识别入口共用同一实现
       await new Promise(resolve => setTimeout(resolve, 800));
-      const result = `[Translated] ${inputText}`;
+      const result = translateText(inputText, sourceLang, targetLang);
       
       set(state => ({
         translationHistory: [
